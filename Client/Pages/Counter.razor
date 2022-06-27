@@ -1,0 +1,23 @@
+﻿@page "/counter"
+@using Syncfusion.Blazor.Layouts
+ 
+<SfDashboardLayout CellSpacing="@(new double[]{20 ,20 })" Columns="4"  MediaQuery="max-width:700px">
+    <DashboardLayoutPanels>
+        <DashboardLayoutPanel SizeX=1 SizeY=1 Row=0 Column=0>
+            <ContentTemplate><div>0</div></ContentTemplate>
+        </DashboardLayoutPanel>
+        <DashboardLayoutPanel SizeX=3 SizeY=1 Row=0 Column=1>
+            <ContentTemplate><div>1</div></ContentTemplate>
+        </DashboardLayoutPanel>
+        <DashboardLayoutPanel SizeY=2 SizeX=4 Row=1 Column=1>
+            <ContentTemplate><div>2</div></ContentTemplate>
+        </DashboardLayoutPanel>
+    </DashboardLayoutPanels>
+</SfDashboardLayout>
+
+<style>
+    .e-panel-content {
+        text-align: center;
+        margin-top: 10px;
+    }
+</style>

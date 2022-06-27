@@ -1,0 +1,237 @@
+﻿@using BlazorApp1.Shared
+@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
+@using Syncfusion.Blazor.DropDowns
+@using Syncfusion.Blazor.Layouts
+@using Syncfusion.Blazor.Data
+@using Syncfusion.Blazor.Charts
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject NavigationManager navigator
+@inject HttpClient httpClient
+@inject IJSRuntime js
+@page "/dashboard"
+
+<head>
+    <link href="_content/Syncfusion.Blazor/bootstrap5.css" rel="stylesheet" />
+</head>
+<div class="jumbotron">
+    <h3>Dashboard</h3>
+    <label class="example-label">Select company and click Enter</label>
+    <SfAutoComplete TValue="string" TItem="CompanyName" Placeholder="Company ticker" DataSource="@companiesNames" @oninput="@((e) => GetCompaniesNames(e))" @onchange="@((e) => GetDetails(e))">
+        <AutoCompleteFieldSettings Value="Ticker"/>
+        <AutoCompleteTemplates TItem="CompanyName">
+            <ItemTemplate>
+                <span class='item'><span class='name'>@((context as CompanyName).Name)</span><span class='ticker'>@((context as CompanyName).Ticker)</span></span>
+            </ItemTemplate>
+            <HeaderTemplate>
+                <span class='head'><span class='name'>Name</span><span class='ticker'>Ticker</span></span>
+            </HeaderTemplate>
+        </AutoCompleteTemplates>
+    </SfAutoComplete>
+</div>
+
+<div id="panel" style="visibility:hidden">
+<SfDashboardLayout CellSpacing="@(new double[]{20 ,20 })" Columns="4"  MediaQuery="max-height:150px">
+    <DashboardLayoutPanels>
+        <DashboardLayoutPanel SizeX=1 SizeY=1 Row=0 Column=0 >
+            <HeaderTemplate> <div>Logo</div></HeaderTemplate>
+            <ContentTemplate>
+                    @if(@companyDetails.Logo == "No logo provided")
+                    {
+                        <div>No logo provided</div>
+                    }
+                    else{
+                    <div class="image"> 
+                        <img src="@(companyDetails.Logo)?apiKey=EXZsCpZ0MQv2fO03mMbNnSE0xnWDawTp" alt="@(companyDetails.Logo) Logo" /> 
+                    </div> 
+                    }
+            </ContentTemplate>
+        </DashboardLayoutPanel>
+        <DashboardLayoutPanel SizeX=3 SizeY=1 Row=0 Column=1>
+            <HeaderTemplate> <div>Description</div></HeaderTemplate>
+            <ContentTemplate>
+                <div>
+                    <button type="button" class="btn btn-warning" @onclick="@(() => AddToWatchList())">Add to WatchList</button>
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th scope="col">Ticker</th>
+                                <th scope="col">Name</th>
+                                <th scope="col">City</th>
+                                <th scope="col">Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <th scope="row">@companyDetails.IdCompany</th>
+                                <td>@companyDetails.Name</td>
+                                <td>@companyDetails.City</td>
+                                <td>@companyDetails.Description</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </ContentTemplate>
+        </DashboardLayoutPanel>
+    </DashboardLayoutPanels>
+</SfDashboardLayout>
+
+<button type="button" class="btn btn-primary" @onclick="@(() => SetStocksToDaily())">Current day</button>
+<button type="button" class="btn btn-primary" @onclick="@(() => GetWeekCharts())">Last week</button>
+<button type="button" class="btn btn-primary" @onclick="@(() => GetThreeMonthsCharts())">Last 3 months</button>
+<h5>Results count: @stockCharts.ResultsCount (0 means there is no data for chosen period or api is not working)</h5>
+
+<SfChart @ref="Chart" Title="@ticker">
+    <ChartPrimaryXAxis ValueType="Syncfusion.Blazor.Charts.ValueType.Category"/>
+    <ChartTooltipSettings Enable="true"></ChartTooltipSettings>
+    <ChartSeriesCollection>
+        <ChartSeries DataSource="@stockCharts.StockCharts" High="High" Width="5" BearFillColor="darkred"  XName="DateTime" BullFillColor="darkgreen" Low="Low" Open="Open" Close="Close" Type="ChartSeriesType.HiloOpenClose">
+        </ChartSeries>
+    </ChartSeriesCollection>
+</SfChart>
+</div>
+
+
+
+
+
+
+
+@code {
+    private SfChart Chart;
+    private string ticker = " ";
+    private int resultsCount = 0;
+    private List<CompanyName> companiesNames = new List<CompanyName>();
+    private CompanyDetails companyDetails = new CompanyDetails();
+    private StockChartsGet stockCharts = new StockChartsGet();
+    private StockChartsGet WeekCharts = new StockChartsGet();
+    private StockChartsGet ThreeMonthsCharts = new StockChartsGet();
+    private StockChartsGet DailyCharts = new StockChartsGet();
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            stockCharts = new StockChartsGet();
+            WeekCharts = new StockChartsGet();
+            ThreeMonthsCharts = new StockChartsGet();
+            DailyCharts = new StockChartsGet();
+            WeekCharts.StockCharts = new List<StockCharts>();
+            ThreeMonthsCharts.StockCharts = new List<StockCharts>();
+            companiesNames = new List<CompanyName>();
+
+        } catch(AccessTokenNotAvailableException exception)
+        {
+            exception.Redirect();
+        }
+    }
+
+    private async Task GetCompaniesNames(Microsoft.AspNetCore.Components.ChangeEventArgs args)
+    {
+        companiesNames = await httpClient.GetFromJsonAsync<List<CompanyName>>("api/companies?ticker=" + args.Value.ToString());
+    }
+
+    private async Task GetDetails(Microsoft.AspNetCore.Components.ChangeEventArgs args)
+    {
+
+        ticker = args.Value.ToString();
+        companyDetails = await httpClient.GetFromJsonAsync<CompanyDetails>("api/Companies/" + ticker);
+        DailyCharts = await httpClient.GetFromJsonAsync<StockChartsGet>("api/companies/" + ticker + "/daily" );
+        stockCharts = DailyCharts;
+        await Chart.RefreshAsync();
+        await js.InvokeVoidAsync("ShowPanel");
+    }
+
+    private async Task GetWeekCharts()
+    {
+        if (WeekCharts.StockCharts.Count == 0)
+        {
+            WeekCharts = await httpClient.GetFromJsonAsync<StockChartsGet>("api/companies/" + ticker + "/" + DateTime.Now.Date.AddDays(-7).ToString("yyyy-MM-dd") + "/" + DateTime.Now.Date.ToString("yyyy-MM-dd"));
+        }
+        stockCharts = WeekCharts;
+        resultsCount = stockCharts.ResultsCount;
+        await Chart.RefreshAsync();
+    }
+
+    private async Task GetThreeMonthsCharts()
+    {
+        if (ThreeMonthsCharts.StockCharts.Count == 0)
+        {
+            ThreeMonthsCharts = await httpClient.GetFromJsonAsync<StockChartsGet>("api/companies/" + ticker + "/" + DateTime.Now.Date.AddMonths(-3).ToString("yyyy-MM-dd") + "/" + DateTime.Now.Date.ToString("yyyy-MM-dd"));
+        }
+        stockCharts = ThreeMonthsCharts;
+        resultsCount = stockCharts.ResultsCount;
+        await Chart.RefreshAsync();
+    }
+
+    private async Task SetStocksToDaily()
+    {
+        stockCharts = DailyCharts;
+        resultsCount = stockCharts.ResultsCount;
+        await Chart.RefreshAsync();
+
+    }
+
+
+    private async Task AddToWatchList()
+    {
+        var result = await js.InvokeAsync<bool>("confirm", "Are you sure?");
+        if (result)
+        {
+            CompanyPost post = new CompanyPost { IdCompany = ticker };
+            HttpResponseMessage response = await httpClient.PostAsJsonAsync("api/users/watchlist", post);
+        } 
+    }
+}
+
+<style>
+    img{
+    width: 90px;
+    aspect-ratio: 1/1;
+}
+.control-wrapper {
+    max-width: 250px;
+    margin: 0 auto;
+    padding: 20px 0px 0px;
+}
+
+.example-label {
+    font-size: 14px;
+    margin-bottom: 6px;
+}
+
+.head, .item {
+    display: table;
+    width: 100%;
+    margin: auto;
+}
+
+.head {
+    height: 40px;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.name, .ticker {
+    display: table-cell;
+    vertical-align: middle;
+    width: 50%;
+}
+
+.head .name {
+    text-indent: 16px;
+}
+
+.e-panel-content {
+    text-align: center;
+    margin-top: 10px;
+}
+</style>
+
+
+
+
+
+
+ 
+
